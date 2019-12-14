@@ -108,19 +108,19 @@ def compareToGold(df, dupesets):
     return true_positive, false_negative, false_positive
 
 
-def dedupe(df, eqRing):
-    df["tdkey"] = df.cname.copy()
-    df.tdkey = df.tdkey.apply(lambda s: __findClosestEqRingMatch(eqRing, s))
-    df = df.groupby(["phone", "tdkey"]).agg(set).reset_index()
-    return df
-
-
 def __findClosestEqRingMatch(eqRing, searchString):
     for ring in eqRing:
         for e in ring:
             if e == searchString:
                 return ring[0]
     return searchString
+
+
+def dedupe(df, eqRing):
+    df["tdkey"] = df.cname.copy()
+    df.tdkey = df.tdkey.apply(lambda s: __findClosestEqRingMatch(eqRing, s))
+    df = df.groupby(["phone", "tdkey"]).agg(set).reset_index()
+    return df
 
 
 def clean(df, completelyInsideOtherBias=0.5, filterCutoff=0.7):
@@ -133,6 +133,6 @@ def clean(df, completelyInsideOtherBias=0.5, filterCutoff=0.7):
 
 if __name__ == '__main__':
     dupesets, dupeids = loadGoldStandard()
-    df = pd.read_csv(PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
-    cleaned = clean(df, 0.7, 0.7)
+    dataframe = pd.read_csv(PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
+    cleaned = clean(dataframe, 0.7, 0.7)
     compareToGold(cleaned, dupesets)

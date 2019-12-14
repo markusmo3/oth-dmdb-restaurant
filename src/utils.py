@@ -16,8 +16,8 @@ def printUniqueTokens(series):
         print("%s: %s" % (key, value))
 
 
-# Sauce: https://www.geeksforgeeks.org/python-merge-list-with-common-elements-in-a-list-of-lists/
-# merge function to  merge all sublist having common elements.
+# Source: https://www.geeksforgeeks.org/python-merge-list-with-common-elements-in-a-list-of-lists/
+# merge function to merge all sublist having common elements.
 def merge_common(lists):
     neigh = defaultdict(set)
     visited = set()
