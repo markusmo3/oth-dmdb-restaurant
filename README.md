@@ -17,3 +17,11 @@ Download and install Docker (Desktop): <https://www.docker.com/products/docker-d
 
 # Links
 * https://pandas.pydata.org/pandas-docs/stable/user_guide/text.html
+
+
+
+# TODO
+* datenanalyse und erkenntnisse am anfang
+* impact von columns in den regeln
+* warum ist die regel so klein, warum bringt des nix mehr
+* die 2 parameter rumspielen, => charts
