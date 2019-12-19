@@ -2,10 +2,14 @@ from typing import List, Any, Set, Tuple
 
 import pandas as pd
 import textdistance as td
+import numpy as np
+import json
 from itertools import combinations
 from src.utils import merge_common
 
 PATH_PREFIX = "../data/work"
+READ_FROM_FILE = True
+DO_BIAS = True
 
 
 def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.5) -> List[Tuple[str, str, float]]:
@@ -16,8 +20,20 @@ def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.5) -> 
             return 0
 
     stringCombinations = set(map(frozenset, combinations(set(strings), 2)))
-    allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1, s2) + bias(s1, s2)) for s1, s2 in stringCombinations]
-    allDistances.sort(key=lambda x: x[2], reverse=True)
+
+    allDistances = []
+    if READ_FROM_FILE:
+        with open(PATH_PREFIX + "/jaccard.json", "r") as file:
+            allDistances = json.loads(file.read())
+    else:
+        allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1, s2)) for s1, s2 in stringCombinations]
+        allDistances.sort(key=lambda x: x[2], reverse=True)
+        with open(PATH_PREFIX + "/jaccard.json", "w+") as file:
+            file.write(json.dumps(allDistances))
+
+    if DO_BIAS:
+        for i in range(len(allDistances)):
+            allDistances[i][2] = allDistances[i][2] + bias(allDistances[i][0], allDistances[i][1])
     return allDistances
 
 
@@ -96,11 +112,16 @@ def compareToGold(df, dupesets):
     for recset in recognizedDuplicates:
         if recset not in dupesets:
             false_positive.append(recset)
-    print("True positives: " + str(len(true_positive)))
-    print("False negatives: " + str(len(false_negative)))
-    print("False positives: " + str(len(false_positive)))
-    precision = len(true_positive) / (len(true_positive) + len(false_positive))
-    recall = len(true_positive) / (len(true_positive) + len(false_negative))
+
+    # times 2 because we work with sets of 2
+    tp = len(true_positive) * 2
+    fn = len(false_negative) * 2
+    fp = len(false_positive) * 2
+    print("True positives: " + str(tp))
+    print("False negatives: " + str(fn))
+    print("False positives: " + str(fp))
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
     fscore = (2 * precision * recall) / (precision + recall)
     print("Precision: " + str(precision))
     print("Recall: " + str(recall))
@@ -118,7 +139,7 @@ def __findClosestEqRingMatch(eqRing, searchString):
 
 def dedupe(df, eqRing):
     df["tdkey"] = df.cname.copy()
-    df.tdkey = df.tdkey.apply(lambda s: __findClosestEqRingMatch(eqRing, s))
+    df["tdkey"] = df["tdkey"].apply(lambda s: __findClosestEqRingMatch(eqRing, s))
     df = df.groupby(["phone", "tdkey"]).agg(set).reset_index()
     return df
 
