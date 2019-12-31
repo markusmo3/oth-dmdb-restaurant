@@ -9,6 +9,7 @@ services:
     volumes:
      - "./notebooks:/notebooks"
      - "./data/work:/data"
+     - "./src:/src:ro"
 # doesnt work on windows sadly...
 #  mongo:
 #    image: mongo
