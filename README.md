@@ -15,8 +15,11 @@ Just run `docker-compose up` in the root directory or execute the `up.bat` scrip
 
 Download and install Docker (Desktop): <https://www.docker.com/products/docker-desktop>
 
+# Paper
+This project includes writing a paper about it, which can be found here: <https://www.overleaf.com/read/vzdpqgxvdzrb>
+
 # Links
-* https://pandas.pydata.org/pandas-docs/stable/user_guide/text.html
+* <https://pandas.pydata.org/pandas-docs/stable/user_guide/text.html>
 
 
 
