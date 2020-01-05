@@ -4,7 +4,7 @@ import pandas as pd
 import textdistance as td
 import json
 from itertools import combinations
-from src.utils import merge_common
+import utils
 
 
 def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.7,
@@ -41,7 +41,11 @@ def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.7,
         with open(PATH_PREFIX + "/" + algo + ".json", "r") as file:
             allDistances = json.loads(file.read())
     else:
-        allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1, s2)) for s1, s2 in stringCombinations]
+        if OLD_CALC:
+            allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1, s2)) for s1, s2 in stringCombinations]
+        else:
+            allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1.split(), s2.split())) for s1, s2 in
+                            stringCombinations]
         allDistances.sort(key=lambda x: x[2], reverse=True)
         if writeToFile:
             with open(PATH_PREFIX + "/" + algo + ".json", "w+") as file:
@@ -70,29 +74,7 @@ def convertToEqualityRings(distanceList: List[Tuple[str, str, float]]) -> List[L
         a list of sets with common elements merged
     """
     sets = map(lambda x: set(x[0:2]), distanceList)
-    return list(merge_common(sets))
-
-
-def loadGoldStandard() -> Tuple[List[Set[int]], List[int]]:
-    """Loads the Gold Standard from the file provided by the HPI 'restaurants_DPL.tsv'
-
-    Returns:
-        a tuple with two lists (dupesets, dupeids).
-            dupesets is a list of all rows in the Gold Standard as sets
-            dupeids is a list of all ids that are in Gold Standard
-    """
-    dupedf = pd.read_csv(PATH_PREFIX + '/restaurants_DPL.tsv', delimiter='\t')
-    dupedict = {}
-    for i, dupeRow in dupedf.iterrows():
-        if dupeRow[0] not in dupedict:
-            dupedict[dupeRow[0]] = set()
-            dupedict[dupeRow[0]].add(dupeRow[0])
-        # dupedict[dupeRow[0]].add(dupeRow[0])
-        dupedict[dupeRow[0]].add(dupeRow[1])
-
-    dupesets: List[Set[Any]] = list(dupedict.values())
-    dupeids: List[int] = [y for x in dupesets for y in x]
-    return dupesets, dupeids
+    return list(utils.merge_common(sets))
 
 
 class Statics:
@@ -100,10 +82,10 @@ class Statics:
     Class that contains important static values.
     """
     CITY_REPLACE_DICT = {
-        "w. hollywood": "west hollywood",
-        "new york city": "new york",
-        "west la": "los angeles",
-        "la": "los angeles"
+        r"w. hollywood": "west hollywood",
+        r"new york city": "new york",
+        r"west la": "los angeles",
+        r"la": "los angeles"
     }
     ADDRESS_REPLACE_DICT = {
         r"(ave|av)": "ave",
@@ -133,7 +115,7 @@ def preProcess(df: pd.DataFrame) -> pd.DataFrame:
     for k, v in Statics.ADDRESS_REPLACE_DICT.items():
         df.address = df.address.str.replace(k, v, case=False, regex=True)
     for k, v in Statics.CITY_REPLACE_DICT.items():
-        df.city = df.city.str.replace(k, v, case=False)
+        df.city = df.city.str.replace(k, v, case=False, regex=True)
     df.type = df.type.fillna("")
     df.type = df.type.str.replace(Statics.BRACKETS_REGEX, '', case=False) \
         .str.replace(r"^.*[0-9] ?", "", case=False)
@@ -194,8 +176,7 @@ def compareToGold(df: pd.DataFrame, dupesets: List[Set[int]], dupeids: List[int]
     print("Precision: " + str(precision))
     print("Recall: " + str(recall))
     print("Fscore: " + str(fscore))
-    # print(ALGO,tp,tn,fp,fn,precision,recall,fscore, sep=",")
-    listofparams = [ALGO, tp, tn, fp, fn, precision, recall, fscore]
+    listofparams = [tp, tn, fp, fn, precision, recall, fscore]
     return true_positive, false_negative, false_positive, true_negative, listofparams
 
 
@@ -226,7 +207,8 @@ def dedupe(df: pd.DataFrame, eqRing: List[List[str]]) -> pd.DataFrame:
 eqRing = []
 
 
-def clean(df: pd.DataFrame, completelyInsideOtherBias: float = 0.7, filterCutoff: float = 0.65) -> pd.DataFrame:
+def clean(df: pd.DataFrame, completelyInsideOtherBias: float = 0.7, filterCutoff: float = 0.65,
+          algo: str = "jaccard", readFromFile: bool = True, writeToFile: bool = True, doBias: bool = True) -> pd.DataFrame:
     """Main function to completely clean a restaurant dataset.
 
     Args:
@@ -239,7 +221,8 @@ def clean(df: pd.DataFrame, completelyInsideOtherBias: float = 0.7, filterCutoff
     """
     global eqRing
     df = preProcess(df)
-    distances = calcDistances(df.cname.unique(), completelyInsideOtherBias)
+
+    distances = calcDistances(df.cname.unique(), completelyInsideOtherBias, algo, readFromFile, writeToFile, doBias)
     filteredDistances = list(filter(lambda x: x[2] >= filterCutoff, distances))
     eqRing = convertToEqualityRings(filteredDistances)
     return dedupe(df, eqRing)
@@ -252,36 +235,21 @@ def __firstOfSet(s: Any) -> Any:
         return s
 
 
-def prepareUploadJsons(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepares and saves two json files that can be imported into mongodb.
-        Look in ../data/work/deduped_raw.json and ../data/work/deduped_clean.json
-
-    Args:
-        df: a pandas DataFrame
-
-    Returns:
-        a pandas DataFrame
-    """
-    df.to_json(PATH_PREFIX + '/deduped_raw.json', orient='records')
-    df.name = df.name.apply(__firstOfSet)
-    df.address = df.address.apply(__firstOfSet)
-    df.city = df.city.apply(__firstOfSet)
-    df.cname = df.cname.apply(__firstOfSet)
-    df.caddress = df.caddress.apply(__firstOfSet)
-    df.to_json(PATH_PREFIX + '/deduped_clean.json', orient='records')
-    print("Written two jsons 'deduped_raw.json' and 'deduped_clean.json' to directory '"
-          + PATH_PREFIX + "'.\nYou can use those with mongoimport!")
-    return df
-
-
 PATH_PREFIX = "../data/work"
 
+# this is a feature flag to toggle the old way on, that found all but 12 duplicates
+# if this is set to false a slightly improved way is used, which found all but 8 duplicates
+OLD_CALC = True
+
 if __name__ == '__main__':
-    dupesets, dupeids = loadGoldStandard()
+    dupesets, dupeids = utils.loadGoldStandard()
     dataframe = pd.read_csv(PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
-    cleaned = clean(dataframe, 0.7, 0.65)
-    compareToGold(cleaned, dupesets, dupeids)
-    prepared = prepareUploadJsons(cleaned)
+    if OLD_CALC:
+        cleaned = clean(dataframe, 0.7, 0.65, readFromFile=False, writeToFile=False)
+    else:
+        cleaned = clean(dataframe, 0.5, 0.45, readFromFile=False, writeToFile=False)
+    a, b, c, d, e = compareToGold(cleaned, dupesets, dupeids)
+    # prepared = utils.prepareUploadJsons(cleaned)
 
 # CODE USED FOR GENERATING THE HEATMAP CHART
 #    bias = 0.7

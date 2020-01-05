@@ -1,9 +1,8 @@
-from unittest import TestCase
-
+import unittest
 from src.clean import calcDistances, convertToEqualityRings
 
 
-class Test(TestCase):
+class Test(unittest.TestCase):
     def test_calc_distances(self):
         s1 = "Hallo Welt!"
         s2 = "Hello World!"
@@ -27,3 +26,7 @@ class Test(TestCase):
         self.assertIn(["b1", "b2"], eqRing)
         print(eqRing)
         # self.fail()
+
+
+if __name__ == '__main__':
+    unittest.main()

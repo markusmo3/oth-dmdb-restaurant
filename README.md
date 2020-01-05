@@ -8,6 +8,13 @@
 * `requirements.txt` Pip Requirements document
 * `up.bat` helper batch script to run the Jupyter notebook
 
+# Important Note
+I played around a lot and came to the solution in `src/clean.py`, but on 05.01 i had another idea,
+which turned out to find all the duplicates and was a lot simpler.
+That new solution can be found in `src/new_clean.py`.
+The Paper was also written for the old solution, which is why i completely copied it
+and rewrote a lot of it.
+
 # Software used
 * Python 3.7.2
 * IntelliJ PyCharm 2019.3 (Professional Edition)
@@ -23,7 +30,12 @@ which can be called with `importToMongo.bat`.
 Download and install Docker (Desktop): <https://www.docker.com/products/docker-desktop>
 
 # Paper
-This project includes writing a paper about it, which can be found here: <https://www.overleaf.com/read/vzdpqgxvdzrb>
+This project includes writing a paper about it, which can be found here: 
+
+New Solution: <https://www.overleaf.com/read/cptxymqmrhmk>
+
+Old Solution: <https://www.overleaf.com/read/vzdpqgxvdzrb>
+
 
 # Links
 * <https://pandas.pydata.org/pandas-docs/stable/user_guide/text.html>
