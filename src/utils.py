@@ -1,7 +1,9 @@
+from typing import List, Any, Set, Tuple, Iterator, Iterable
 from collections import defaultdict
+import pandas as pd
 
 
-def printUniqueTokens(series):
+def printUniqueTokens(series: pd.Series):
     unique_series = series.unique()
     token_count = {}
     for a in unique_series:
@@ -18,7 +20,7 @@ def printUniqueTokens(series):
 
 # Source: https://www.geeksforgeeks.org/python-merge-list-with-common-elements-in-a-list-of-lists/
 # merge function to merge all sublist having common elements.
-def merge_common(lists):
+def merge_common(lists: Iterable[Iterable[Any]]) -> List[List[Any]]:
     neigh = defaultdict(set)
     visited = set()
     for each in lists:

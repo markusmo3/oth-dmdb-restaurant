@@ -1,0 +1,6 @@
+FROM mongo
+ARG PW
+COPY ./work/deduped_raw.json /raw.json
+COPY ./work/deduped_clean.json /clean.json
+RUN mongoimport --host oth-shard-0/oth-shard-00-00-pqdtq.mongodb.net:27017,oth-shard-00-01-pqdtq.mongodb.net:27017,oth-shard-00-02-pqdtq.mongodb.net:27017 --ssl --username importer --password $PW --authenticationDatabase admin --db dmdb --collection raw --type json --file /raw.json -v --jsonArray --drop
+RUN mongoimport --host oth-shard-0/oth-shard-00-00-pqdtq.mongodb.net:27017,oth-shard-00-01-pqdtq.mongodb.net:27017,oth-shard-00-02-pqdtq.mongodb.net:27017 --ssl --username importer --password $PW --authenticationDatabase admin --db dmdb --collection clean --type json --file /clean.json -v --jsonArray --drop

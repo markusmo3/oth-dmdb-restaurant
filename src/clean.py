@@ -2,17 +2,33 @@ from typing import List, Any, Set, Tuple
 
 import pandas as pd
 import textdistance as td
-import numpy as np
 import json
 from itertools import combinations
 from src.utils import merge_common
 
-PATH_PREFIX = "../data/work"
-READ_FROM_FILE = True
-DO_BIAS = True
 
+def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.7,
+                  algo: str = "jaccard", readFromFile: bool = True, writeToFile: bool = True, doBias: bool = True)\
+        -> List[Tuple[str, str, float]]:
+    """Calculates the distanced according to the algorithm in the constant variable algo.
 
-def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.5) -> List[Tuple[str, str, float]]:
+    If the constant doBias is set to true, then the bias function is applied with the parameter
+    completelyInsideOtherBias. If the constant readFromFile is set to true, then the algorithm won't execute, but
+    rather load a cached representation from a json file, which will not work for all algorithms, but only those that
+    were cached previously
+
+    Args:
+        strings: to calculate the distances for each combination
+        completelyInsideOtherBias: parameter for the bias function, default = 0.7
+        algo: to use for text distance comparison, default = "jaccard"
+        readFromFile: if a cached text distance matrix should be read from a file, default = True
+        writeToFile: if the calculated text distance matrix should be written to a file, default = True
+        doBias: if the bias function should be applied, default = True
+
+    Returns:
+        list of tuples with the form (name1: String, name2: String, distanceValue: float)
+    """
+
     def bias(s1, s2):
         if s1 in s2 or s2 in s1:
             return completelyInsideOtherBias
@@ -21,28 +37,50 @@ def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.5) -> 
 
     stringCombinations = set(map(frozenset, combinations(set(strings), 2)))
 
-    allDistances = []
-    if READ_FROM_FILE:
-        with open(PATH_PREFIX + "/jaccard.json", "r") as file:
+    if readFromFile:
+        with open(PATH_PREFIX + "/" + algo + ".json", "r") as file:
             allDistances = json.loads(file.read())
     else:
         allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1, s2)) for s1, s2 in stringCombinations]
         allDistances.sort(key=lambda x: x[2], reverse=True)
-        with open(PATH_PREFIX + "/jaccard.json", "w+") as file:
-            file.write(json.dumps(allDistances))
+        if writeToFile:
+            with open(PATH_PREFIX + "/" + algo + ".json", "w+") as file:
+                file.write(json.dumps(allDistances))
 
-    if DO_BIAS:
+    if doBias:
         for i in range(len(allDistances)):
-            allDistances[i][2] = allDistances[i][2] + bias(allDistances[i][0], allDistances[i][1])
+            allDistances[i] = (allDistances[i][0], allDistances[i][1],
+                               allDistances[i][2] + bias(allDistances[i][0], allDistances[i][1]))
     return allDistances
 
 
-def convertToEqualityRings(distanceList: List[Tuple[str, str, float]]) -> List[Set[str]]:
+def convertToEqualityRings(distanceList: List[Tuple[str, str, float]]) -> List[List[str]]:
+    """Converts a distance list of Tuples(str,str,float) into a list of sets with common elements merged.
+
+    Example:
+        convertToEqualityRings([("hello", "hellas", 0.8), ("hello", "bye", 0), ("test1", "test2", 0.8)])
+        will return: [{"hello", "hellas", "bye"},{"test1", "test2"}]
+
+    Args:
+        distanceList: contains tuples of form: (name1: String, name2: String, distanceValue: float).
+            The distanceValue is ignored and just the names are taken in to account, which are then used to merge all
+            Tuples of form (name1: String, name2: String) into sets if they have any elements in common.
+
+    Returns:
+        a list of sets with common elements merged
+    """
     sets = map(lambda x: set(x[0:2]), distanceList)
     return list(merge_common(sets))
 
 
-def loadGoldStandard() -> Tuple[List[set], List[int]]:
+def loadGoldStandard() -> Tuple[List[Set[int]], List[int]]:
+    """Loads the Gold Standard from the file provided by the HPI 'restaurants_DPL.tsv'
+
+    Returns:
+        a tuple with two lists (dupesets, dupeids).
+            dupesets is a list of all rows in the Gold Standard as sets
+            dupeids is a list of all ids that are in Gold Standard
+    """
     dupedf = pd.read_csv(PATH_PREFIX + '/restaurants_DPL.tsv', delimiter='\t')
     dupedict = {}
     for i, dupeRow in dupedf.iterrows():
@@ -58,6 +96,9 @@ def loadGoldStandard() -> Tuple[List[set], List[int]]:
 
 
 class Statics:
+    """
+    Class that contains important static values.
+    """
     CITY_REPLACE_DICT = {
         "w. hollywood": "west hollywood",
         "new york city": "new york",
@@ -76,7 +117,15 @@ class Statics:
     NON_ALPHA_REGEX = r"[^a-zA-Z0-9]"
 
 
-def preProcess(df):
+def preProcess(df: pd.DataFrame) -> pd.DataFrame:
+    """Pre processes the given DataFrame by applying a lot of Regex replacements.
+
+    Args:
+        df: a pandas DataFrame to pre process
+
+    Returns:
+        a pre processed pandas DataFrame
+    """
     # reformat the index
     # df = df.drop(labels=['id'], axis=1)
     # df.set_index("id", inplace=True)
@@ -99,52 +148,96 @@ def preProcess(df):
     return df
 
 
-def compareToGold(df, dupesets):
+def compareToGold(df: pd.DataFrame, dupesets: List[Set[int]], dupeids: List[int]) -> Tuple[Set, Set, Set, Set, List]:
+    """Compares the given DataFrame to the given Gold Standard and prints and returns the results
+
+    Args:
+        df: a pandas DataFrame to compare to the Gold Standard
+        dupesets: the Gold Standard dupesets, see #loadGoldStandard()
+        dupeids: the Gold Standard dupeids, see #loadGoldStandard()
+
+    Returns:
+        A Tuple (true_positive, false_negative, false_positive, true_negative, listofparams)
+    """
     recognizedDuplicates = list(df[df.id.map(len) > 1].id)
-    true_positive = []
-    false_negative = []
-    false_positive = []
+    recognizedNonDuplicates = list(df[df.id.map(len) <= 1].id)
+    true_positive = set()
+    true_negative = set()
+    false_negative = set()
+    false_positive = set()
     for dupeset in dupesets:
         if dupeset in recognizedDuplicates:
-            true_positive.append(dupeset)
+            true_positive.add(frozenset(dupeset))
         else:
-            false_negative.append(dupeset)
-    for recset in recognizedDuplicates:
-        if recset not in dupesets:
-            false_positive.append(recset)
+            false_negative.add(frozenset(dupeset))
+    for recdup in recognizedDuplicates:
+        if recdup in dupesets:
+            true_positive.add(frozenset(recdup))
+        else:
+            false_positive.add(frozenset(recdup))
+    for recnondup in recognizedNonDuplicates:
+        if recnondup not in dupeids:
+            true_negative.add(frozenset(recnondup))
 
     # times 2 because we work with sets of 2
-    tp = len(true_positive) * 2
-    fn = len(false_negative) * 2
-    fp = len(false_positive) * 2
+    tp = len([e for s in true_positive for e in s])
+    tn = len([e for s in true_negative for e in s])
+    fn = len([e for s in false_negative for e in s])
+    fp = len([e for s in false_positive for e in s])
     print("True positives: " + str(tp))
-    print("False negatives: " + str(fn))
+    print("True negatives: " + str(tn))
     print("False positives: " + str(fp))
+    print("False negatives: " + str(fn))
     precision = tp / (tp + fp)
     recall = tp / (tp + fn)
     fscore = (2 * precision * recall) / (precision + recall)
     print("Precision: " + str(precision))
     print("Recall: " + str(recall))
     print("Fscore: " + str(fscore))
-    return true_positive, false_negative, false_positive
+    # print(ALGO,tp,tn,fp,fn,precision,recall,fscore, sep=",")
+    listofparams = [ALGO, tp, tn, fp, fn, precision, recall, fscore]
+    return true_positive, false_negative, false_positive, true_negative, listofparams
 
 
-def __findClosestEqRingMatch(eqRing, searchString):
-    for ring in eqRing:
+def __findClosestEqRingMatch(eqRing: List[List[str]], searchString: str) -> str:
+    for i, ring in enumerate(eqRing):
         for e in ring:
             if e == searchString:
                 return ring[0]
     return searchString
 
 
-def dedupe(df, eqRing):
+def dedupe(df: pd.DataFrame, eqRing: List[List[str]]) -> pd.DataFrame:
+    """Deduplicates the given preprocessed DataFrame by using the eqRing.
+
+    Args:
+        df: a preprocessed pandas DataFrame
+        eqRing: to use for grouping by
+
+    Returns:
+        a deduped pandas DataFrame
+    """
     df["tdkey"] = df.cname.copy()
     df["tdkey"] = df["tdkey"].apply(lambda s: __findClosestEqRingMatch(eqRing, s))
     df = df.groupby(["phone", "tdkey"]).agg(set).reset_index()
     return df
 
 
-def clean(df, completelyInsideOtherBias=0.5, filterCutoff=0.7):
+eqRing = []
+
+
+def clean(df: pd.DataFrame, completelyInsideOtherBias: float = 0.7, filterCutoff: float = 0.65) -> pd.DataFrame:
+    """Main function to completely clean a restaurant dataset.
+
+    Args:
+        df: a pandas DataFrame
+        completelyInsideOtherBias: float parameter for the bias function
+        filterCutoff: float parameter specifying at which distance value to cut off the distance list
+
+    Returns:
+        a deduplicated pandas DataFrame
+    """
+    global eqRing
     df = preProcess(df)
     distances = calcDistances(df.cname.unique(), completelyInsideOtherBias)
     filteredDistances = list(filter(lambda x: x[2] >= filterCutoff, distances))
@@ -152,8 +245,54 @@ def clean(df, completelyInsideOtherBias=0.5, filterCutoff=0.7):
     return dedupe(df, eqRing)
 
 
+def __firstOfSet(s: Any) -> Any:
+    if isinstance(s, set):
+        return s.pop()
+    else:
+        return s
+
+
+def prepareUploadJsons(df: pd.DataFrame) -> pd.DataFrame:
+    """Prepares and saves two json files that can be imported into mongodb.
+        Look in ../data/work/deduped_raw.json and ../data/work/deduped_clean.json
+
+    Args:
+        df: a pandas DataFrame
+
+    Returns:
+        a pandas DataFrame
+    """
+    df.to_json(PATH_PREFIX + '/deduped_raw.json', orient='records')
+    df.name = df.name.apply(__firstOfSet)
+    df.address = df.address.apply(__firstOfSet)
+    df.city = df.city.apply(__firstOfSet)
+    df.cname = df.cname.apply(__firstOfSet)
+    df.caddress = df.caddress.apply(__firstOfSet)
+    df.to_json(PATH_PREFIX + '/deduped_clean.json', orient='records')
+    print("Written two jsons 'deduped_raw.json' and 'deduped_clean.json' to directory '"
+          + PATH_PREFIX + "'.\nYou can use those with mongoimport!")
+    return df
+
+
+PATH_PREFIX = "../data/work"
+
 if __name__ == '__main__':
     dupesets, dupeids = loadGoldStandard()
     dataframe = pd.read_csv(PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
-    cleaned = clean(dataframe, 0.7, 0.7)
-    compareToGold(cleaned, dupesets)
+    cleaned = clean(dataframe, 0.7, 0.65)
+    compareToGold(cleaned, dupesets, dupeids)
+    prepared = prepareUploadJsons(cleaned)
+
+# CODE USED FOR GENERATING THE HEATMAP CHART
+#    bias = 0.7
+#    cutoff = 0.7
+#    allparams = []
+#    for bias in np.arange(0.0,1.1,0.1):
+#        for cutoff in np.arange(0.0,1.1,0.1):
+#            cleaned = clean(dataframe, bias, cutoff)
+#            a,b,c,d,params = compareToGold(cleaned, dupesets, dupeids)
+#            print(bias,cutoff,*params, sep=",")
+#            allparams.append([bias,cutoff,*params])
+#    print("##### ALL PARAMS:")
+#    for p in allparams:
+#        print(*p,sep=",")
