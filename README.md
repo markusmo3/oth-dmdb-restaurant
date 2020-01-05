@@ -9,8 +9,10 @@
 * `up.bat` helper batch script to run the Jupyter notebook
 
 # Important Note
-I played around a lot and came to the solution in `src/clean.py`, but on 05.01 i had another idea,
-which turned out to find all the duplicates and was a lot simpler.
+I played around a lot and came to the solution in `src/clean.py`, but on 05.01.2020 
+i had another idea, which turned out to be A LOT better and find 
+all the duplicates and was a lot simpler.
+
 That new solution can be found in `src/new_clean.py`.
 The Paper was also written for the old solution, which is why i completely copied it
 and rewrote a lot of it.
@@ -36,6 +38,18 @@ New Solution: <https://www.overleaf.com/read/cptxymqmrhmk>
 
 Old Solution: <https://www.overleaf.com/read/vzdpqgxvdzrb>
 
+# MongoDB
+A public user was created for the use with this repository.
+
+Host: `oth-pqdtq.mongodb.net/test`
+
+Username: `dmdb-reader`
+ 
+Password: `Qd2XBicKQnGcyvNS`
+
+Database: `oth`
+
+Collections: `raw` and `clean`
 
 # Links
 * <https://pandas.pydata.org/pandas-docs/stable/user_guide/text.html>
