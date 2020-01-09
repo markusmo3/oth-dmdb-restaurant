@@ -1,11 +1,11 @@
 import unittest
-from io import BytesIO
 
 import textdistance as td
-import tokenize as to
+
 
 def tokenize(s: str):
     return s.split()
+
 
 class TestTextDistance(unittest.TestCase):
     def test_jaccard(self):
@@ -21,7 +21,6 @@ class TestTextDistance(unittest.TestCase):
         print(td.jaccard(tokenize("Hello World Test"), tokenize("deeHllloorsTtW  ")))
         print(td.jaccard(tokenize("Hello World Test"), tokenize("World Test Hello")))
         print(td.jaccard(tokenize("Hello World Test"), tokenize("Test World Hello")))
-
 
 
 if __name__ == '__main__':

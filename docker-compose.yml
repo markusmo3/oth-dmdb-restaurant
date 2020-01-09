@@ -8,7 +8,7 @@ services:
      - "8888:8888"
     volumes:
      - "./notebooks:/notebooks"
-     - "./data/work:/data"
+     - "./data/work:/data/work"
      - "./src:/src:ro"
 # doesnt work on windows sadly...
 #  mongo:

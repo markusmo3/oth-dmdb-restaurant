@@ -1,14 +1,15 @@
-from typing import List, Any, Set, Tuple
+from itertools import combinations
+from typing import List, Set, Tuple
 
 import pandas as pd
 import textdistance as td
-import json
-from itertools import combinations
+
 import utils
 
-class Statics:
+
+class Regexes:
     """
-    Class that contains important static values.
+    Class that contains all regular expressions used in the data pre processing.
     """
     CITY_REPLACE_DICT = {
         r"w. hollywood": "west hollywood",
@@ -23,6 +24,7 @@ class Statics:
         r"s\.": "s",
         r" ?between.*$": ""
     }
+    TYPE_REMOVE_REGEX = r"^.*[0-9] ?"
     BRACKETS_REGEX = r" ?\(.*\)"
     NON_ALPHA_OR_SPACE_REGEX = r"[^a-zA-Z0-9 ]"
     NON_ALPHA_REGEX = r"[^a-zA-Z0-9]"
@@ -37,25 +39,22 @@ def preProcess(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         a pre processed pandas DataFrame
     """
-    # reformat the index
-    # df = df.drop(labels=['id'], axis=1)
-    # df.set_index("id", inplace=True)
 
-    for k, v in Statics.ADDRESS_REPLACE_DICT.items():
+    for k, v in Regexes.ADDRESS_REPLACE_DICT.items():
         df.address = df.address.str.replace(k, v, case=False, regex=True)
-    for k, v in Statics.CITY_REPLACE_DICT.items():
+    for k, v in Regexes.CITY_REPLACE_DICT.items():
         df.city = df.city.str.replace(k, v, case=False, regex=True)
     df.type = df.type.fillna("")
-    df.type = df.type.str.replace(Statics.BRACKETS_REGEX, '', case=False) \
-        .str.replace(r"^.*[0-9] ?", "", case=False)
-    df.phone = df.phone.str.replace(Statics.NON_ALPHA_REGEX, '', case=False)
-    df.name = df.name.str.replace(Statics.BRACKETS_REGEX, '', case=False)
+    df.type = df.type.str.replace(Regexes.BRACKETS_REGEX, '', case=False) \
+        .str.replace(Regexes.TYPE_REMOVE_REGEX, "", case=False)
+    df.phone = df.phone.str.replace(Regexes.NON_ALPHA_REGEX, '', case=False)
+    df.name = df.name.str.replace(Regexes.BRACKETS_REGEX, '', case=False)
 
     df["cname"] = df.name.copy()
     df["caddress"] = df.address.copy()
-    df.cname = df.cname.str.replace(Statics.NON_ALPHA_OR_SPACE_REGEX, '', case=False) \
+    df.cname = df.cname.str.replace(Regexes.NON_ALPHA_OR_SPACE_REGEX, '', case=False) \
         .str.replace('  the$', '', case=False)
-    df.caddress = df.caddress.str.replace(Statics.NON_ALPHA_OR_SPACE_REGEX, '', case=False)
+    df.caddress = df.caddress.str.replace(Regexes.NON_ALPHA_OR_SPACE_REGEX, '', case=False)
     return df
 
 
@@ -86,7 +85,7 @@ def areRowsSame(r1, r2, distanceAlgorithm=td.jaccard, minTokenDistance=0.5, minT
         return stringsSimilar(r1.cname, r2.cname) \
                or r1.cname in r2.cname \
                or r2.cname in r1.cname
-    elif r1.city == r2.city:
+    if r1.city == r2.city:
         return stringsSimilar(r1.cname, r2.cname) \
                and stringsSimilar(r1.caddress, r2.caddress) \
                and numbersEqual(r1.caddress, r2.caddress)
@@ -94,9 +93,9 @@ def areRowsSame(r1, r2, distanceAlgorithm=td.jaccard, minTokenDistance=0.5, minT
         return False
 
 
-def clean(df: pd.DataFrame, distanceAlgorithm=td.jaccard, minTokenDistance=0.5, minTextDistance=0.9) \
+def deduplicate(df: pd.DataFrame, distanceAlgorithm=td.jaccard, minTokenDistance=0.5, minTextDistance=0.9) \
         -> Tuple[pd.DataFrame, List[Set[int]]]:
-    """Cleans the given pandas DataFrame completely
+    """Deduplicates the given pandas DataFrame completely
 
     Args:
         df: a fresh pandas DataFrame
@@ -105,42 +104,53 @@ def clean(df: pd.DataFrame, distanceAlgorithm=td.jaccard, minTokenDistance=0.5, 
         minTextDistance: to use, default 0.9
 
     Returns:
-        a tuple of (df: DataFrame, duplicateSet: List[Set[int]]).
+        a tuple of (df: DataFrame, recognizedDupeSets: List[Set[int]]).
             df is the cleaned DataFrame, grouped and aggregated.
-            duplicateSet is a list of sets that contain the ids.
+            recognizedDupeSets is a list of sets that contain the ids.
     """
     df = preProcess(df)
-    dupes = []
+    recognizedDupeSets = []
     for twoRows in combinations(df.itertuples(), 2):
         row1 = twoRows[0]
         row2 = twoRows[1]
         if areRowsSame(row1, row2, distanceAlgorithm, minTokenDistance, minTextDistance):
-            dupes.append({row1.id, row2.id})
+            recognizedDupeSets.append({row1.id, row2.id})
 
     # merge common elements, isn't needed, but to make it future-proof
-    mergedDupes = list(utils.merge_common(dupes))
+    mergedDupeSets = list(utils.merge_common(recognizedDupeSets))
     # convert back to a list of sets
-    mergedDupes = list(map(lambda x: set(x), mergedDupes))
+    mergedDupeSets = list(map(lambda x: set(x), mergedDupeSets))
 
     # give every row a unique negative identifier
     df["group"] = df["id"].copy().apply(lambda x: -x)
-    for idx, dupeset in enumerate(mergedDupes):
+    for idx, dupeset in enumerate(mergedDupeSets):
         # assign each set of duplicates a new unique positive identifier
         for di in dupeset:
             df.at[di-1, "group"] = idx
 
     # group by the identifier
     df = df.groupby(["group"]).agg(set).reset_index()
-    return df, mergedDupes
+    return df, mergedDupeSets
+
+
+def simpleCompareToGold(dupes):
+    dupeSets, dupeIds = utils.loadGoldStandard()
+    print("Real duplicates: ", dupeSets)
+    print("Found duplicates:", dupes)
+    fn, fp = utils.difference(dupes, dupeSets)
+    print("False negatives:", len(fn), fn)
+    print("False positives:", len(fp), fp)
 
 
 if __name__ == '__main__':
-    dupesets, dupeids = utils.loadGoldStandard()
-    dataframe = pd.read_csv(utils.PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
-    cleaned, dupes = clean(dataframe)
-    print("Real duplicates: ", dupesets)
-    print("Found duplicates:", dupes)
-    fn, fp = utils.difference(dupes, dupesets)
-    print("False negatives:", len(fn), fn)
-    print("False positives:", len(fp), fp)
-    # utils.prepareUploadJsons(cleaned)
+    originalDf = pd.read_csv(utils.PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
+    cleaned, dupes = deduplicate(originalDf)
+
+    if utils.config["compareToGold"]:
+        print("tp,tn,fp,fn,precision,recall,fscore")
+        utils.compareToGold(dupes, printType="csv")
+
+    if utils.config["prepareUploadJsons"]:
+        utils.prepareUploadJsons(cleaned)
+
+    # simpleCompareToGold(dupes)

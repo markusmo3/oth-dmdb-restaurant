@@ -8,7 +8,7 @@ import utils
 
 
 def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.7,
-                  algo: str = "jaccard", readFromFile: bool = True, writeToFile: bool = True, doBias: bool = True)\
+                  algo: str = "jaccard", readFromFile: bool = True, writeToFile: bool = True, doBias: bool = True) \
         -> List[Tuple[str, str, float]]:
     """Calculates the distanced according to the algorithm in the constant variable algo.
 
@@ -38,17 +38,17 @@ def calcDistances(strings: Set[str], completelyInsideOtherBias: float = 0.7,
     stringCombinations = set(map(frozenset, combinations(set(strings), 2)))
 
     if readFromFile:
-        with open(PATH_PREFIX + "/" + algo + ".json", "r") as file:
+        with open(utils.PATH_PREFIX + "/" + algo + ".json", "r") as file:
             allDistances = json.loads(file.read())
     else:
-        if OLD_CALC:
+        if utils.config["useOldCalculation"]:
             allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1, s2)) for s1, s2 in stringCombinations]
         else:
             allDistances = [(s1, s2, s1 == s2 and -1 or td.jaccard(s1.split(), s2.split())) for s1, s2 in
                             stringCombinations]
         allDistances.sort(key=lambda x: x[2], reverse=True)
         if writeToFile:
-            with open(PATH_PREFIX + "/" + algo + ".json", "w+") as file:
+            with open(utils.PATH_PREFIX + "/" + algo + ".json", "w+") as file:
                 file.write(json.dumps(allDistances))
 
     if doBias:
@@ -130,56 +130,6 @@ def preProcess(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def compareToGold(df: pd.DataFrame, dupesets: List[Set[int]], dupeids: List[int]) -> Tuple[Set, Set, Set, Set, List]:
-    """Compares the given DataFrame to the given Gold Standard and prints and returns the results
-
-    Args:
-        df: a pandas DataFrame to compare to the Gold Standard
-        dupesets: the Gold Standard dupesets, see #loadGoldStandard()
-        dupeids: the Gold Standard dupeids, see #loadGoldStandard()
-
-    Returns:
-        A Tuple (true_positive, false_negative, false_positive, true_negative, listofparams)
-    """
-    recognizedDuplicates = list(df[df.id.map(len) > 1].id)
-    recognizedNonDuplicates = list(df[df.id.map(len) <= 1].id)
-    true_positive = set()
-    true_negative = set()
-    false_negative = set()
-    false_positive = set()
-    for dupeset in dupesets:
-        if dupeset in recognizedDuplicates:
-            true_positive.add(frozenset(dupeset))
-        else:
-            false_negative.add(frozenset(dupeset))
-    for recdup in recognizedDuplicates:
-        if recdup in dupesets:
-            true_positive.add(frozenset(recdup))
-        else:
-            false_positive.add(frozenset(recdup))
-    for recnondup in recognizedNonDuplicates:
-        if recnondup not in dupeids:
-            true_negative.add(frozenset(recnondup))
-
-    # times 2 because we work with sets of 2
-    tp = len([e for s in true_positive for e in s])
-    tn = len([e for s in true_negative for e in s])
-    fn = len([e for s in false_negative for e in s])
-    fp = len([e for s in false_positive for e in s])
-    print("True positives: " + str(tp))
-    print("True negatives: " + str(tn))
-    print("False positives: " + str(fp))
-    print("False negatives: " + str(fn))
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
-    fscore = (2 * precision * recall) / (precision + recall)
-    print("Precision: " + str(precision))
-    print("Recall: " + str(recall))
-    print("Fscore: " + str(fscore))
-    listofparams = [tp, tn, fp, fn, precision, recall, fscore]
-    return true_positive, false_negative, false_positive, true_negative, listofparams
-
-
 def __findClosestEqRingMatch(eqRing: List[List[str]], searchString: str) -> str:
     for i, ring in enumerate(eqRing):
         for e in ring:
@@ -208,13 +158,18 @@ eqRing = []
 
 
 def clean(df: pd.DataFrame, completelyInsideOtherBias: float = 0.7, filterCutoff: float = 0.65,
-          algo: str = "jaccard", readFromFile: bool = True, writeToFile: bool = True, doBias: bool = True) -> pd.DataFrame:
+          algo: str = "jaccard", readFromFile: bool = True, writeToFile: bool = True,
+          doBias: bool = True) -> pd.DataFrame:
     """Main function to completely clean a restaurant dataset.
 
     Args:
         df: a pandas DataFrame
         completelyInsideOtherBias: float parameter for the bias function
         filterCutoff: float parameter specifying at which distance value to cut off the distance list
+        algo: to use for text distance comparison, default = "jaccard"
+        readFromFile: if a cached text distance matrix should be read from a file, default = True
+        writeToFile: if the calculated text distance matrix should be written to a file, default = True
+        doBias: if the bias function should be applied, default = True
 
     Returns:
         a deduplicated pandas DataFrame
@@ -235,23 +190,20 @@ def __firstOfSet(s: Any) -> Any:
         return s
 
 
-PATH_PREFIX = "../data/work"
-
-# this is a feature flag to toggle the old way on, that found all but 12 duplicates
-# if this is set to false a slightly improved way is used, which found all but 8 duplicates
-OLD_CALC = True
-
 if __name__ == '__main__':
-    dupesets, dupeids = utils.loadGoldStandard()
-    dataframe = pd.read_csv(PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
-    if OLD_CALC:
-        cleaned = clean(dataframe, 0.7, 0.65, readFromFile=False, writeToFile=False)
+    originalDf = pd.read_csv(utils.PATH_PREFIX + '/restaurants.tsv', delimiter='\t')
+    if utils.config["useOldCalculation"]:
+        cleaned = clean(originalDf, 0.7, 0.65, readFromFile=False, writeToFile=False)
     else:
-        cleaned = clean(dataframe, 0.5, 0.45, readFromFile=False, writeToFile=False)
-    a, b, c, d, e = compareToGold(cleaned, dupesets, dupeids)
-    # prepared = utils.prepareUploadJsons(cleaned)
+        cleaned = clean(originalDf, 0.5, 0.45, readFromFile=False, writeToFile=False)
 
-# CODE USED FOR GENERATING THE HEATMAP CHART
+    if utils.config["compareToGold"]:
+        a, b, c, d = utils.compareDfToGold(cleaned)
+
+    if utils.config["prepareUploadJsons"]:
+        utils.prepareUploadJsons(cleaned)
+
+# OLD CODE USED FOR GENERATING A HEATMAP CHART
 #    bias = 0.7
 #    cutoff = 0.7
 #    allparams = []
