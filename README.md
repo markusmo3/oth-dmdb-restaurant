@@ -12,14 +12,23 @@
 * `requirements.txt` Pip Requirements document
 * `up.bat` helper batch script to run the Jupyter notebook
 
+# Minimal workflow
+* install all pip dependencies
+* run `src/main.py`
+  * the files `data/work/deduped_clean.json` and `data/work/deduped_raw.json` got generated
+* import them into MongoDB
+  * either by using the importToMongo.bat script, that calls the `data/Dockerfile-mongoimport`, 
+  which needs some modification to import into a custom server
+  * or by calling the mongoimport utility directly (requires mongodb to be installed locally)
+
 # Important Note
 I played around a lot and came to the solution in `src/clean.py`, but on 05.01.2020 
 i had another idea, which turned out to be A LOT better, find 
 all the duplicates and was a lot simpler.
 
 That new solution can be found in `src/main.py`.
-The Paper was also written for the old solution, which is why i completely copied it
-and rewrote a lot of it.
+The Paper was originally written for the old solution, which is why i completely copied
+and rewrote it.
 
 # Software used
 * Python 3.7.2
@@ -42,15 +51,5 @@ New Solution: <https://www.overleaf.com/read/cptxymqmrhmk>
 
 Old Solution: <https://www.overleaf.com/read/vzdpqgxvdzrb>
 
-# MongoDB
-A public user was created for the use with this repository.
-
-Host: `oth-pqdtq.mongodb.net/test`
-
-Username: `dmdb-reader`
- 
-Password: `Qd2XBicKQnGcyvNS`
-
-Database: `oth`
-
-Collections: `raw` and `clean`
+## Credentials
+The credentials contained in this repository were invalidated before making them public.
